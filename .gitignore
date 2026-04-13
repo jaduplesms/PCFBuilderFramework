@@ -41,3 +41,4 @@ generate_*.py
 *.pptx
 screenshots/
 *.customization
+DEPLOYMENT_ROADMAP.md
