@@ -4,6 +4,7 @@ import { HarnessShell } from './ui/HarnessShell';
 import { Gallery } from './ui/gallery/Gallery';
 import { useHarnessStore } from './store/harness-store';
 import { loadEntityData } from './store/data-store';
+import { loadMetadata } from './store/metadata-store';
 import { setResxStrings } from './shim/resources';
 import type { ManifestConfig } from './types/manifest';
 
@@ -34,21 +35,30 @@ export function App() {
       console.log(`[pcf-workbench] RESX: ${Object.keys(resxStrings).length} strings loaded`);
     }
 
-    // Load data.json from the PCF project directory
-    fetch('/pcf-data/data.json')
-      .then(r => r.ok ? r.json() : null)
-      .catch(() => null)
-      .then(data => {
-        if (data && Object.keys(data).length > 0) {
-          loadEntityData(data);
-          const tableCount = Object.keys(data).length;
-          const recordCount = Object.values(data as Record<string, any[]>).reduce((sum, arr) => sum + arr.length, 0);
-          console.log(`[pcf-workbench] Loaded data.json: ${tableCount} tables, ${recordCount} records`);
+    // Load data.json and metadata.json from the PCF project directory
+    Promise.all([
+      fetch('/pcf-data/data.json').then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch('/pcf-data/metadata.json').then(r => r.ok ? r.json() : null).catch(() => null),
+    ]).then(([data, metadata]) => {
+      if (data && Object.keys(data).length > 0) {
+        loadEntityData(data);
+        const tableCount = Object.keys(data).length;
+        const recordCount = Object.values(data as Record<string, any[]>).reduce((sum, arr) => sum + arr.length, 0);
+        console.log(`[pcf-workbench] Loaded data.json: ${tableCount} tables, ${recordCount} records`);
+      } else {
+        console.log('[pcf-workbench] No data.json found. WebAPI calls will return empty results.');
+      }
+      if (metadata) {
+        // metadata can be an array (multiple files merged) or a single object
+        if (Array.isArray(metadata)) {
+          for (const item of metadata) loadMetadata(item);
         } else {
-          console.log('[pcf-workbench] No data.json found. WebAPI calls will return empty results.');
+          loadMetadata(metadata);
         }
-        setReady(true);
-      });
+        console.log(`[pcf-workbench] Loaded entity metadata`);
+      }
+      setReady(true);
+    });
   }, []);
 
   if (!ready) {

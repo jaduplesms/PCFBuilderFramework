@@ -40,3 +40,4 @@ generate_*.py
 *.docx
 *.pptx
 screenshots/
+*.customization

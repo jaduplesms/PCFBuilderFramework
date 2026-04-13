@@ -6,6 +6,7 @@ import {
   Save24Regular, Open24Regular, Delete24Regular, Wand24Regular,
 } from '@fluentui/react-icons';
 import { useHarnessStore, DEVICE_PRESETS } from '../../store/harness-store';
+import { getEntityData } from '../../store/data-store';
 import type { ManifestProperty, ManifestDataSet } from '../../types/manifest';
 
 const useStyles = makeStyles({
@@ -71,8 +72,15 @@ const useStyles = makeStyles({
 
 interface TestScenario {
   name: string;
+  description?: string;
   savedAt: string;
   propertyValues: Record<string, any>;
+  /** Map property names to entity column names for field-level binding.
+   *  When loaded, the harness resolves values from the data.json record
+   *  matching pageEntityId + pageEntityTypeName.
+   *  Example: { "latitudeField": "msdyn_latitude", "gridField1": "starttime" }
+   */
+  fieldBindings?: Record<string, string>;
   pageEntityId: string;
   pageEntityTypeName: string;
   networkMode: string;
@@ -231,9 +239,10 @@ function generateSkeletonScenarios(
 
 interface ScenariosPanelProps {
   controlId: string;
+  onScenarioLoaded?: () => void;
 }
 
-export function ScenariosPanel({ controlId }: ScenariosPanelProps) {
+export function ScenariosPanel({ controlId, onScenarioLoaded }: ScenariosPanelProps) {
   const styles = useStyles();
   const [scenarios, setScenarios] = useState<TestScenario[]>([]);
   const [newName, setNewName] = useState('');
@@ -252,15 +261,30 @@ export function ScenariosPanel({ controlId }: ScenariosPanelProps) {
         const local = loadScenariosFromStorage(controlId);
         const file = (fileScenarios && Array.isArray(fileScenarios)) ? fileScenarios : [];
 
-        // Merge: file scenarios first, then any local-only ones
-        const merged = [...file];
+        // Merge: user-modified scenarios (localStorage) win over file scenarios.
+        // A localStorage scenario is "modified" if its savedAt is newer than the file version.
+        // File-only scenarios are added as-is. Local-only scenarios are appended.
+        const merged: TestScenario[] = [];
+        for (const fileSc of file) {
+          const localSc = local.find(l => l.name === fileSc.name);
+          if (localSc && localSc.savedAt > fileSc.savedAt) {
+            // User modified this scenario after it was loaded from file — keep local version
+            merged.push(localSc);
+          } else {
+            merged.push(fileSc);
+          }
+        }
+        // Append any local-only scenarios not in the file
         for (const s of local) {
           if (!merged.find(m => m.name === s.name)) {
             merged.push(s);
           }
         }
         setScenarios(merged);
-        saveScenariosToStorage(controlId, merged);
+        // Only save to localStorage if we have scenarios
+        if (merged.length > 0) {
+          saveScenariosToStorage(controlId, merged);
+        }
         setLoaded(true);
       });
   }, [controlId]);
@@ -305,23 +329,58 @@ export function ScenariosPanel({ controlId }: ScenariosPanelProps) {
 
     setScenarios(updated);
     saveScenariosToStorage(controlId, updated);
-    setNewName('');
-    setMessage({ text: `Saved "${name}"`, intent: 'success' });
+    setMessage({ text: existing >= 0 ? `Updated "${name}"` : `Saved "${name}"`, intent: 'success' });
     addLogEntry({ category: 'scenario', method: 'save', args: { name } });
     setTimeout(() => setMessage(null), 3000);
   }, [newName, scenarios, propertyValues, pageEntityId, pageEntityTypeName, networkMode, devicePreset, isControlDisabled, addLogEntry]);
 
   const handleLoad = useCallback((scenario: TestScenario) => {
-    setPropertyValues(scenario.propertyValues);
+    let resolvedValues = { ...scenario.propertyValues };
+
+    // Resolve field bindings from entity data
+    if (scenario.fieldBindings && scenario.pageEntityId && scenario.pageEntityTypeName) {
+      const records = getEntityData(scenario.pageEntityTypeName);
+      const normalId = scenario.pageEntityId.replace(/[{}]/g, '').toLowerCase();
+      const record = records.find(r => {
+        for (const key of Object.keys(r)) {
+          if ((key.toLowerCase().endsWith('id') || key === 'id') &&
+              String(r[key]).replace(/[{}]/g, '').toLowerCase() === normalId) {
+            return true;
+          }
+        }
+        return false;
+      });
+
+      if (record) {
+        for (const [propName, columnName] of Object.entries(scenario.fieldBindings)) {
+          const val = record[columnName];
+          if (val !== undefined) {
+            resolvedValues[propName] = val;
+          }
+          // Also check OData formatted value for lookups
+          const formatted = record[`_${columnName}_value@OData.Community.Display.V1.FormattedValue`]
+            ?? record[`${columnName}@OData.Community.Display.V1.FormattedValue`];
+          const lookupVal = record[`_${columnName}_value`] ?? record[columnName];
+          if (formatted && typeof lookupVal === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}/.test(lookupVal)) {
+            resolvedValues[propName] = [{ id: lookupVal, name: formatted, entityType: columnName }];
+          }
+        }
+        addLogEntry({ category: 'scenario', method: 'fieldBindings', args: { resolved: Object.keys(scenario.fieldBindings).length, from: scenario.pageEntityTypeName } });
+      }
+    }
+
+    setPropertyValues(resolvedValues);
     setPageEntityId(scenario.pageEntityId);
     setPageEntityTypeName(scenario.pageEntityTypeName);
     setNetworkMode(scenario.networkMode as any);
     setDevicePreset(scenario.devicePreset);
     setControlDisabled(scenario.isControlDisabled);
+    setNewName(scenario.name);
     setMessage({ text: `Loaded "${scenario.name}"`, intent: 'success' });
     addLogEntry({ category: 'scenario', method: 'load', args: { name: scenario.name } });
     setTimeout(() => setMessage(null), 3000);
-  }, [setPropertyValues, setPageEntityId, setPageEntityTypeName, setNetworkMode, setDevicePreset, setControlDisabled, addLogEntry]);
+    onScenarioLoaded?.();
+  }, [setPropertyValues, setPageEntityId, setPageEntityTypeName, setNetworkMode, setDevicePreset, setControlDisabled, addLogEntry, onScenarioLoaded]);
 
   const handleDelete = useCallback((name: string) => {
     const updated = scenarios.filter(s => s.name !== name);

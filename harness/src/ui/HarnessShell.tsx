@@ -210,19 +210,19 @@ export function HarnessShell({ manifest, bundlePath, cssFiles, controlDir }: Pro
               onTabSelect={(_, d) => setActiveTab(d.value as SidePanelTab)}
               size="small"
             >
-              <Tab value="properties" icon={<Settings24Regular />} />
-              <Tab value="data" icon={<Database24Regular />} />
-              <Tab value="scenarios" icon={<Beaker24Regular />} />
-              <Tab value="network" icon={<PlugConnected24Regular />} />
-              <Tab value="device" icon={<Phone24Regular />} />
-              <Tab value="lifecycle" icon={<Play24Regular />} />
-              <Tab value="performance" icon={<TopSpeed24Regular />} />
+              <Tab value="properties" icon={<Settings24Regular />} title="Properties" />
+              <Tab value="data" icon={<Database24Regular />} title="Data (WebAPI Mock)" />
+              <Tab value="scenarios" icon={<Beaker24Regular />} title="Test Scenarios" />
+              <Tab value="network" icon={<PlugConnected24Regular />} title="Network Conditioning" />
+              <Tab value="device" icon={<Phone24Regular />} title="Device Emulation" />
+              <Tab value="lifecycle" icon={<Play24Regular />} title="Lifecycle Monitor" />
+              <Tab value="performance" icon={<TopSpeed24Regular />} title="Performance" />
             </TabList>
           </div>
           <div className={styles.sidePanelContent}>
-            {activeTab === 'properties' && <PropertyEditor manifest={manifest} />}
-            {activeTab === 'data' && <DataPanel />}
-            {activeTab === 'scenarios' && <ScenariosPanel controlId={`${manifest.namespace}.${manifest.constructor}`} />}
+            <div style={{ display: activeTab === 'properties' ? 'contents' : 'none' }}><PropertyEditor manifest={manifest} /></div>
+            <div style={{ display: activeTab === 'data' ? 'contents' : 'none' }}><DataPanel /></div>
+            <div style={{ display: activeTab === 'scenarios' ? 'contents' : 'none' }}><ScenariosPanel controlId={`${manifest.namespace}.${manifest.constructor}`} onScenarioLoaded={() => setActiveTab('properties')} /></div>
             {activeTab === 'network' && <NetworkPanel />}
             {activeTab === 'device' && <DevicePanel />}
             {activeTab === 'lifecycle' && <LifecyclePanel />}

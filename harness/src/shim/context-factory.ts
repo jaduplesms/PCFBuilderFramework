@@ -11,20 +11,54 @@ import { createResourcesShim } from './resources';
 import { createWebApiShim } from './web-api';
 import { createFluentDesignShim } from './fluent-design';
 import { getEntityStoreKeys } from '../store/data-store';
+import { getColumnDisplayName, getEntityMetadata } from '../store/metadata-store';
 
 /**
  * Build a typed parameter property based on manifest of-type.
  */
-function buildProperty(prop: ManifestProperty, rawValue: any) {
+/**
+ * Convert a Dataverse logical name to a human-readable display name.
+ * e.g. msdyn_latitude → Latitude, starttime → Start Time, _msdyn_workorder_value → Work Order
+ */
+function formatDisplayName(logicalName: string): string {
+  let name = logicalName;
+  // Strip common prefixes
+  name = name.replace(/^_/, '').replace(/_value$/, '');
+  name = name.replace(/^msdyn_/, '').replace(/^ukf_/, '').replace(/^cr_/, '');
+  // Split on underscores and camelCase boundaries
+  name = name.replace(/([a-z])([A-Z])/g, '$1 $2');
+  name = name.replace(/_/g, ' ');
+  // Capitalise each word
+  return name.replace(/\b\w/g, c => c.toUpperCase()).trim();
+}
+
+function buildProperty(prop: ManifestProperty, rawValue: any, boundColumn?: string, entityType?: string) {
+  const displayName = boundColumn
+    ? (entityType ? getColumnDisplayName(entityType, boundColumn) : null) ?? formatDisplayName(boundColumn)
+    : prop.displayNameKey;
+
+  // Look up column metadata for additional attributes (Format, etc.)
+  let columnType: string | undefined;
+  if (boundColumn && entityType) {
+    const meta = getEntityMetadata(entityType);
+    columnType = meta?.columns[boundColumn]?.type;
+  }
+
+  // Detect duration fields from metadata type: Integer fields named "duration" or "*duration"
+  // In Dataverse, duration fields are Integer with Format="Duration"
+  const isDuration = columnType === 'Integer' && boundColumn &&
+    (boundColumn === 'duration' || boundColumn.endsWith('duration'));
+
   const base = {
     error: false,
     errorMessage: '',
     formatted: rawValue != null ? String(rawValue) : '',
     type: prop.ofType,
     attributes: {
-      LogicalName: prop.name,
-      DisplayName: prop.displayNameKey,
-      Type: prop.ofType,
+      LogicalName: boundColumn || prop.name,
+      DisplayName: displayName,
+      Type: columnType ?? prop.ofType,
+      Format: isDuration ? 'Duration' : undefined,
     },
   };
 
@@ -60,7 +94,17 @@ function buildProperty(prop: ManifestProperty, rawValue: any) {
     case 'SingleLine.TextArea':
     case 'Multiple':
     default:
-      return { ...base, raw: rawValue ?? null };
+      // Auto-detect lookup arrays (from test scenarios or of-type-group fields)
+      if (Array.isArray(rawValue) && rawValue.length > 0 && rawValue[0]?.id) {
+        return {
+          ...base,
+          raw: rawValue,
+          formatted: rawValue[0].name ?? String(rawValue[0].id),
+          getTargetEntityType: () => rawValue[0].entityType ?? '',
+          getViewId: () => '',
+        };
+      }
+      return { ...base, raw: rawValue ?? null, formatted: rawValue != null ? String(rawValue) : '' };
   }
 }
 
@@ -210,6 +254,46 @@ function buildDataSet(
 /**
  * Build the parameters object from manifest + current property values.
  */
+/**
+ * Resolve $columnName field bindings from entity data.
+ * Returns the resolved value, or the original if not a binding.
+ */
+function resolveFieldBinding(
+  rawValue: any,
+  getEntityData: (entityType: string) => Record<string, any>[],
+  getState: () => HarnessStore,
+): any {
+  if (typeof rawValue !== 'string' || !rawValue.startsWith('$')) return rawValue;
+
+  const columnName = rawValue.substring(1);
+  const state = getState();
+  const entityType = state.pageEntityTypeName;
+  const entityId = state.pageEntityId;
+  if (!entityType || !entityId) return null;
+
+  const records = getEntityData(entityType);
+  const normalId = entityId.replace(/[{}]/g, '').toLowerCase();
+  const record = records.find(r => {
+    for (const key of Object.keys(r)) {
+      if ((key.toLowerCase().endsWith('id') || key === 'id') &&
+          String(r[key]).replace(/[{}]/g, '').toLowerCase() === normalId) {
+        return true;
+      }
+    }
+    return false;
+  });
+  if (!record) return null;
+
+  // Check for OData lookup format
+  const lookupVal = record[`_${columnName}_value`];
+  const formatted = record[`_${columnName}_value@OData.Community.Display.V1.FormattedValue`]
+    ?? record[`${columnName}@OData.Community.Display.V1.FormattedValue`];
+  if (lookupVal && formatted) {
+    return [{ id: lookupVal, name: formatted, entityType: columnName }];
+  }
+  return record[columnName] ?? null;
+}
+
 function buildParameters(
   manifest: ManifestConfig,
   propertyValues: Record<string, any>,
@@ -218,7 +302,10 @@ function buildParameters(
 ) {
   const params: Record<string, any> = {};
   for (const prop of manifest.properties) {
-    params[prop.name] = buildProperty(prop, propertyValues[prop.name]);
+    const rawVal = propertyValues[prop.name];
+    const boundColumn = typeof rawVal === 'string' && rawVal.startsWith('$') ? rawVal.substring(1) : undefined;
+    const resolved = resolveFieldBinding(rawVal, getEntityData, getState);
+    params[prop.name] = buildProperty(prop, resolved, boundColumn, getState().pageEntityTypeName);
   }
   for (const ds of manifest.dataSets) {
     params[ds.name] = buildDataSet(ds, getEntityData, getState);
@@ -287,9 +374,14 @@ export function rebuildParameters(
   getEntityData?: (entityType: string) => Record<string, any>[],
   getState?: () => HarnessStore,
 ): void {
-  // Rebuild scalar properties
+  // Rebuild scalar properties, resolving $columnName bindings
   for (const prop of manifest.properties) {
-    context.parameters[prop.name] = buildProperty(prop, propertyValues[prop.name]);
+    const rawVal = propertyValues[prop.name];
+    const boundColumn = typeof rawVal === 'string' && rawVal.startsWith('$') ? rawVal.substring(1) : undefined;
+    const resolved = (getEntityData && getState)
+      ? resolveFieldBinding(rawVal, getEntityData, getState)
+      : rawVal;
+    context.parameters[prop.name] = buildProperty(prop, resolved, boundColumn, getState?.().pageEntityTypeName);
   }
   // Rebuild datasets if data functions provided
   if (getEntityData && getState) {

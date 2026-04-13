@@ -153,6 +153,14 @@ function applySelect(entity: Record<string, any>, columns: string[] | null): Rec
   for (const col of columns) {
     if (col in entity) result[col] = entity[col];
   }
+  // Also include OData annotations for selected columns (formatted values, lookup metadata)
+  for (const key of Object.keys(entity)) {
+    if (!key.includes('@')) continue;
+    const baseCol = key.split('@')[0];
+    if (columns.some(c => baseCol === c || baseCol === `_${c}_value` || c === baseCol)) {
+      result[key] = entity[key];
+    }
+  }
   return result;
 }
 

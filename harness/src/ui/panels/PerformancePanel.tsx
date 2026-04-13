@@ -10,7 +10,7 @@ const useStyles = makeStyles({
     height: '100%',
     display: 'flex',
     flexDirection: 'column',
-    gap: '12px',
+    gap: '8px',
   },
   sectionHeader: {
     display: 'flex',
@@ -215,65 +215,6 @@ export function PerformancePanel() {
           </div>
         </div>
       )}
-
-      {/* Heap Timeline */}
-      {heapAvailable && heapSnapshots.length > 1 && (
-        <div>
-          <div className={styles.sectionHeader}>
-            JS Heap
-            <Badge appearance="outline" size="small">{jsHeapUsedMB.toFixed(1)} MB</Badge>
-          </div>
-          <div className={styles.heapTimeline}>
-            {heapSnapshots.slice(-50).map((s, i) => {
-              const pct = (s.heapUsedMB / maxHeap) * 100;
-              return (
-                <div
-                  key={i}
-                  className={styles.heapBar}
-                  style={{
-                    height: `${Math.max(pct, 5)}%`,
-                    backgroundColor: s.heapUsedMB > maxHeap * 0.8 ? '#d13438' : s.heapUsedMB > maxHeap * 0.6 ? '#ff8c00' : '#107c10',
-                  }}
-                  title={`${s.heapUsedMB.toFixed(1)} MB — ${s.label}`}
-                />
-              );
-            })}
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: '#999' }}>
-            <span>{heapSnapshots.length > 0 ? heapSnapshots[Math.max(0, heapSnapshots.length - 50)].heapUsedMB.toFixed(1) : 0} MB</span>
-            <span>{maxHeap.toFixed(1)} MB</span>
-          </div>
-        </div>
-      )}
-
-      {/* Top 3 Heap Growth */}
-      {heapGrowth.length > 0 && (
-        <div>
-          <div className={styles.sectionHeader}>Top Heap Allocations</div>
-          <table className={styles.table}>
-            <thead>
-              <tr>
-                <th className={styles.th}>Event</th>
-                <th className={styles.th}>Growth</th>
-                <th className={styles.th}>Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {heapGrowth.map((g, i) => (
-                <tr key={i}>
-                  <td className={styles.td}>{g.label}</td>
-                  <td className={styles.td} style={{ color: g.deltaMB > 1 ? '#d13438' : g.deltaMB > 0.1 ? '#ff8c00' : '#107c10' }}>
-                    +{g.deltaMB.toFixed(2)} MB
-                  </td>
-                  <td className={styles.td}>{g.heapMB.toFixed(1)} MB</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      <Divider />
 
       {/* Top Requests by Duration */}
       {topByDuration.length > 0 && (

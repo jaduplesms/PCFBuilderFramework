@@ -358,6 +358,49 @@ export const controlDir = ${JSON.stringify(state.controlDir)};`;
             }
           }
         }
+        // Serve entity metadata (display names and types)
+        // Supports: metadata.json (simple or Dataverse API format)
+        //           EntityDefinitions_*.json (raw Dataverse API exports)
+        if (urlPath === '/metadata.json') {
+          // Collect all metadata sources
+          const metaFiles: string[] = [];
+          const searchDirs = [state.controlDir, state.projectRoot];
+          for (const dir of searchDirs) {
+            if (!dir || !fs.existsSync(dir)) continue;
+            // Check for metadata.json
+            const metaPath = path.join(dir, 'metadata.json');
+            if (fs.existsSync(metaPath)) metaFiles.push(metaPath);
+            // Check for EntityDefinitions_*.json files (raw Dataverse exports)
+            try {
+              for (const file of fs.readdirSync(dir)) {
+                if (file.startsWith('EntityDefinitions_') && file.endsWith('.json')) {
+                  metaFiles.push(path.join(dir, file));
+                }
+              }
+            } catch { /* skip */ }
+          }
+
+          if (metaFiles.length > 0) {
+            // Merge all metadata files into a single array response
+            // The client-side loadMetadata() handles both formats
+            const merged: any[] = [];
+            for (const filePath of metaFiles) {
+              try {
+                const content = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+                merged.push(content);
+              } catch { /* skip invalid files */ }
+            }
+            res.setHeader('Content-Type', 'application/json');
+            res.setHeader('Cache-Control', 'no-cache');
+            res.end(JSON.stringify(merged));
+            return;
+          }
+
+          res.setHeader('Content-Type', 'application/json');
+          res.end('[]');
+          return;
+        }
+
         // Serve test-scenarios.json
         if (urlPath === '/test-scenarios.json') {
           const scenarioCandidates = [
