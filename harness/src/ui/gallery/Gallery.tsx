@@ -267,9 +267,14 @@ export function Gallery() {
   return (
     <div className={styles.root}>
       <div className={styles.header}>
-        <div className={styles.headerTitle}>PCF Workbench</div>
-        <div className={styles.headerSubtitle}>
-          {visibleControls.length} controls found in workspace{privateCount > 0 && !showPrivate ? ` (${privateCount} private hidden)` : ''}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <img src="/pcf-workbench-icon.svg" alt="PCF Workbench" style={{ width: 96, height: 96 }} />
+          <div>
+            <div className={styles.headerTitle}>PCF Workbench</div>
+            <div className={styles.headerSubtitle}>
+              {visibleControls.length} controls found in workspace{privateCount > 0 && !showPrivate ? ` (${privateCount} private hidden)` : ''}
+            </div>
+          </div>
         </div>
       </div>
 
