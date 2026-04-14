@@ -168,8 +168,8 @@ Gallery cards display the total `out/` directory size for each built control, wi
 ### Install
 
 ```bash
-git clone https://github.com/jaduplesms/PCFBuilderFramework.git
-cd PCFBuilderFramework/harness
+git clone https://github.com/jaduplesms/PCF-Workbench.git
+cd PCF-Workbench/harness
 npm install
 ```
 

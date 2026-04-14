@@ -42,3 +42,4 @@ generate_*.py
 screenshots/
 *.customization
 DEPLOYMENT_ROADMAP.md
+tools/update_booking_form.py

@@ -24,7 +24,7 @@ function formatDisplayName(logicalName: string): string {
   let name = logicalName;
   // Strip common prefixes
   name = name.replace(/^_/, '').replace(/_value$/, '');
-  name = name.replace(/^msdyn_/, '').replace(/^ukf_/, '').replace(/^cr_/, '');
+  name = name.replace(/^msdyn_/, '').replace(/^cr_/, '');
   // Split on underscores and camelCase boundaries
   name = name.replace(/([a-z])([A-Z])/g, '$1 $2');
   name = name.replace(/_/g, ' ');
