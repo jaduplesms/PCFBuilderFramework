@@ -369,3 +369,6 @@ This project is licensed under the [MIT License](LICENSE).
 - **PCF controls** loaded into the harness are the user's own work — the harness is a development tool only
 - **`@types/powerapps-component-framework`** type definitions used during development are MIT licensed
 - This project is **not affiliated with or endorsed by Microsoft** — it is an independent development tool for the Power Apps Component Framework ecosystem
+
+### Disclaimer
+This solution and code are provided as-is. This is not first-party Microsoft product or code, and should not be treated as such. Always test in a non-production environment. This solution is intended to be adjustable and extendable by end customers.
