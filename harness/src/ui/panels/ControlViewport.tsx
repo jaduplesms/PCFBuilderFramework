@@ -43,9 +43,10 @@ const useStyles = makeStyles({
     backgroundColor: '#fafafa',
     boxShadow: tokens.shadow8,
     display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: 'flex-start',
+    justifyContent: 'flex-start',
     flexShrink: 0,
+    overflow: 'hidden',
   },
   viewport: {
     backgroundColor: '#ffffff',
