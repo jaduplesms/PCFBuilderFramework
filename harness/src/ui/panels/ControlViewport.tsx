@@ -61,6 +61,36 @@ const useStyles = makeStyles({
   error: {
     margin: '16px',
   },
+  sizeBadge: {
+    position: 'absolute' as const,
+    bottom: '8px',
+    right: '8px',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    alignItems: 'flex-end',
+    gap: '2px',
+    padding: '6px 10px',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    color: '#FFFFFF',
+    borderRadius: tokens.borderRadiusMedium,
+    fontFamily: tokens.fontFamilyMonospace,
+    fontSize: tokens.fontSizeBase200,
+    pointerEvents: 'none' as const,
+    userSelect: 'none' as const,
+    zIndex: 5,
+  },
+  sizeBadgeLabel: {
+    fontSize: '10px',
+    opacity: 0.7,
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.5px',
+    marginRight: '4px',
+  },
+  sizeBadgeRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+  },
 });
 
 interface Props {
@@ -372,6 +402,18 @@ export function ControlViewport({ manifest, bundlePath, cssFiles, controlDir }: 
             width: containerWidth != null ? `${containerWidth}px` : '100%',
             height: containerHeight != null ? `${containerHeight}px` : '100%',
           }} />
+          <div className={styles.sizeBadge} aria-label="Viewport size">
+            <div className={styles.sizeBadgeRow}>
+              <span className={styles.sizeBadgeLabel}>Viewport</span>
+              <span>{viewportWidth} × {viewportHeight}</span>
+            </div>
+            {(containerWidth != null || containerHeight != null) && (
+              <div className={styles.sizeBadgeRow}>
+                <span className={styles.sizeBadgeLabel}>Container</span>
+                <span>{containerWidth ?? viewportWidth} × {containerHeight ?? viewportHeight}</span>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
