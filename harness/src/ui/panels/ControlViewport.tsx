@@ -43,10 +43,15 @@ const useStyles = makeStyles({
     backgroundColor: '#fafafa',
     boxShadow: tokens.shadow8,
     display: 'flex',
-    alignItems: 'flex-start',
+    flexDirection: 'column' as const,
+    alignItems: 'stretch',
     justifyContent: 'flex-start',
     flexShrink: 0,
     overflow: 'hidden',
+  },
+  viewportNotifications: {
+    flexShrink: 0,
+    width: '100%',
   },
   viewport: {
     backgroundColor: '#ffffff',
@@ -384,8 +389,6 @@ export function ControlViewport({ manifest, bundlePath, cssFiles, controlDir }: 
         />
       </div>
 
-      <FormNotificationBanner />
-
       <div className={styles.viewportWrapper}>
         <div
           className={styles.viewportFrame}
@@ -394,6 +397,9 @@ export function ControlViewport({ manifest, bundlePath, cssFiles, controlDir }: 
             height: viewportHeight,
           }}
         >
+          <div className={styles.viewportNotifications}>
+            <FormNotificationBanner />
+          </div>
           <div
             className={styles.viewport}
             style={{
