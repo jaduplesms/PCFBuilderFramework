@@ -1,4 +1,5 @@
 import type { HarnessStore } from '../store/harness-store';
+import { pushDialog, type OpenFormDialogRequest } from './dialog-bus';
 
 export function createNavigationShim(getState: () => HarnessStore) {
   const log = (method: string, args?: any) =>
@@ -20,9 +21,16 @@ export function createNavigationShim(getState: () => HarnessStore) {
       window.alert(`Error: ${options.message || options.details || 'Unknown error'}`);
       return Promise.resolve();
     },
-    openForm(options: any, parameters?: any): Promise<any> {
+    openForm(options: any, parameters?: any): Promise<{ savedEntityReference: any[] }> {
       log('openForm', { options, parameters });
-      return Promise.resolve({ savedEntityReference: [] });
+      return new Promise(resolve => {
+        pushDialog<OpenFormDialogRequest>({
+          kind: 'openForm',
+          options,
+          parameters,
+          resolve,
+        });
+      });
     },
     openUrl(url: string, options?: any): void {
       log('openUrl', { url, options });

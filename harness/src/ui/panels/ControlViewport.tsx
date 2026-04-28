@@ -4,6 +4,7 @@ import { ArrowClockwise24Regular, Camera24Regular } from '@fluentui/react-icons'
 import { useHarnessStore } from '../../store/harness-store';
 import { ControlHost, type ControlHostState } from '../../loader/control-host';
 import type { ManifestConfig } from '../../types/manifest';
+import { FormNotificationBanner } from '../FormNotificationBanner';
 
 const useStyles = makeStyles({
   root: {
@@ -198,6 +199,8 @@ export function ControlViewport({ manifest, bundlePath, cssFiles, controlDir }: 
 
   const viewportWidth = useHarnessStore(s => s.viewportWidth);
   const viewportHeight = useHarnessStore(s => s.viewportHeight);
+  const containerWidth = useHarnessStore(s => s.containerWidth);
+  const containerHeight = useHarnessStore(s => s.containerHeight);
   const propertyValues = useHarnessStore(s => s.propertyValues);
   const networkMode = useHarnessStore(s => s.networkMode);
   const isControlDisabled = useHarnessStore(s => s.isControlDisabled);
@@ -205,6 +208,14 @@ export function ControlViewport({ manifest, bundlePath, cssFiles, controlDir }: 
   const isDarkMode = useHarnessStore(s => s.isDarkMode);
   const pageEntityId = useHarnessStore(s => s.pageEntityId);
   const pageEntityTypeName = useHarnessStore(s => s.pageEntityTypeName);
+  const pageEntityRecordName = useHarnessStore(s => s.pageEntityRecordName);
+  const isFullscreen = useHarnessStore(s => s.isFullscreen);
+  const userLanguageId = useHarnessStore(s => s.userLanguageId);
+  const userIsRTL = useHarnessStore(s => s.userIsRTL);
+  const userTimeZoneOffsetMinutes = useHarnessStore(s => s.userTimeZoneOffsetMinutes);
+  const host = useHarnessStore(s => s.host);
+  const datasetState = useHarnessStore(s => s.datasetState);
+  const dataVersion = useHarnessStore(s => s.dataVersion);
 
   // Initialize control host
   useEffect(() => {
@@ -308,7 +319,7 @@ export function ControlViewport({ manifest, bundlePath, cssFiles, controlDir }: 
     return () => {
       if (updateTimerRef.current) clearTimeout(updateTimerRef.current);
     };
-  }, [propertyValues, networkMode, isControlDisabled, formFactor, isDarkMode, pageEntityId, pageEntityTypeName]);
+  }, [propertyValues, networkMode, isControlDisabled, formFactor, isDarkMode, pageEntityId, pageEntityTypeName, pageEntityRecordName, containerWidth, containerHeight, isFullscreen, userLanguageId, userIsRTL, userTimeZoneOffsetMinutes, host, datasetState, dataVersion]);
 
   const handleReload = useCallback(() => {
     hostRef.current?.reload();
@@ -337,10 +348,15 @@ export function ControlViewport({ manifest, bundlePath, cssFiles, controlDir }: 
         />
       </div>
 
+      <FormNotificationBanner />
+
       <div className={styles.viewportWrapper}>
         <div
           className={styles.viewport}
-          style={{ width: viewportWidth, height: viewportHeight }}
+          style={{
+            width: containerWidth ?? viewportWidth,
+            height: containerHeight ?? viewportHeight,
+          }}
         >
           {hostState.error && (
             <MessageBar intent="error" className={styles.error}>
@@ -352,7 +368,10 @@ export function ControlViewport({ manifest, bundlePath, cssFiles, controlDir }: 
               <Spinner label="Loading control..." />
             </div>
           )}
-          <div ref={containerRef} className={styles.controlContainer} />
+          <div ref={containerRef} className={styles.controlContainer} style={{
+            width: containerWidth != null ? `${containerWidth}px` : '100%',
+            height: containerHeight != null ? `${containerHeight}px` : '100%',
+          }} />
         </div>
       </div>
     </div>

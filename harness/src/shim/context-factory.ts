@@ -10,8 +10,19 @@ import { createUtilsShim } from './utils';
 import { createResourcesShim } from './resources';
 import { createWebApiShim } from './web-api';
 import { createFluentDesignShim } from './fluent-design';
-import { getEntityStoreKeys } from '../store/data-store';
+import { createCopilotShim } from './copilot';
+import { addEntityRecord, deleteEntityRecord, getEntityStoreKeys } from '../store/data-store';
 import { getColumnDisplayName, getEntityMetadata } from '../store/metadata-store';
+import { defaultDatasetState } from '../store/harness-store';
+import {
+  closePopupEntry,
+  createPopupEntry,
+  deletePopupEntry,
+  getPopupsIdValue,
+  openPopupEntry,
+  setPopupsIdValue,
+  updatePopupEntry,
+} from './popup-bus';
 
 /**
  * Build a typed parameter property based on manifest of-type.
@@ -122,10 +133,14 @@ function buildDataSet(
   function getRecords() {
     // Try dataset name first (e.g. "bookingRecords")
     let rawData = getEntityData(ds.name);
+    let resolvedEntity = ds.name;
     if (rawData.length === 0) {
       // Fallback: try pageEntityTypeName from store
       const pageEntity = getState().pageEntityTypeName;
-      if (pageEntity) rawData = getEntityData(pageEntity);
+      if (pageEntity) {
+        rawData = getEntityData(pageEntity);
+        if (rawData.length > 0) resolvedEntity = pageEntity;
+      }
     }
     if (rawData.length === 0) {
       // Fallback: use the first entity in the data store that has array records
@@ -133,13 +148,36 @@ function buildDataSet(
       // when the dataset name is different (e.g. "bookingRecords")
       for (const key of getEntityStoreKeys()) {
         const data = getEntityData(key);
-        if (data.length > 0) { rawData = data; break; }
+        if (data.length > 0) { rawData = data; resolvedEntity = key; break; }
       }
     }
+
+    // Apply sorting from current dataset state
+    const dsState = getState().datasetState[ds.name] ?? defaultDatasetState();
+    let working = [...rawData];
+    if (dsState.sorting.length > 0) {
+      working.sort((a, b) => {
+        for (const sort of dsState.sorting) {
+          const av = a[sort.name];
+          const bv = b[sort.name];
+          if (av === bv) continue;
+          if (av == null) return 1;
+          if (bv == null) return -1;
+          const cmp = av < bv ? -1 : 1;
+          return sort.sortDirection === 1 ? -cmp : cmp;
+        }
+        return 0;
+      });
+    }
+    const totalAfterFilter = working.length;
+    // Slice to current page (cumulative pages)
+    const limit = dsState.pageNumber * dsState.pageSize;
+    working = working.slice(0, limit);
+
     const records: Record<string, any> = {};
     const sortedIds: string[] = [];
 
-    for (const row of rawData) {
+    for (const row of working) {
       // Find the ID field
       const idField = Object.keys(row).find(k => k.toLowerCase().endsWith('id') || k === 'id');
       const id = idField ? String(row[idField]) : String(Math.random());
@@ -178,29 +216,55 @@ function buildDataSet(
         getNamedReference: () => ({ id: { guid: id }, name: '', etn: ds.name }),
       };
     }
-    return { records, sortedIds };
+    return { records, sortedIds, totalAfterFilter, resolvedEntity };
   }
 
-  const { records, sortedIds } = getRecords();
+  const { records, sortedIds, totalAfterFilter, resolvedEntity } = getRecords();
+  const dsState = getState().datasetState[ds.name] ?? defaultDatasetState();
+  // Mutable sorting array — controls may push/splice into it; refresh() captures back into store.
+  const liveSorting: any[] = dsState.sorting.map(s => ({ ...s }));
+  let liveFilter: any = dsState.filtering;
+  const totalResultCount = totalAfterFilter;
+  const limit = dsState.pageNumber * dsState.pageSize;
+  const hasNextPage = limit < totalResultCount;
+  const hasPreviousPage = dsState.pageNumber > 1;
 
   return {
     loading: false,
     error: false,
     errorMessage: '',
     paging: {
-      totalResultCount: sortedIds.length,
-      pageSize: 250,
-      hasNextPage: false,
-      hasPreviousPage: false,
-      loadNextPage: () => {},
-      loadPreviousPage: () => {},
-      setPageSize: () => {},
+      totalResultCount,
+      pageSize: dsState.pageSize,
+      hasNextPage,
+      hasPreviousPage,
+      loadNextPage: () => {
+        getState().addLogEntry({ category: 'data', method: 'paging.loadNextPage', args: { dataSet: ds.name } });
+        getState().setDatasetPage(ds.name, dsState.pageNumber + 1, dsState.pageSize);
+      },
+      loadPreviousPage: () => {
+        getState().addLogEntry({ category: 'data', method: 'paging.loadPreviousPage', args: { dataSet: ds.name } });
+        getState().setDatasetPage(ds.name, Math.max(1, dsState.pageNumber - 1), dsState.pageSize);
+      },
+      setPageSize: (size: number) => {
+        getState().addLogEntry({ category: 'data', method: 'paging.setPageSize', args: { dataSet: ds.name, size } });
+        getState().setDatasetPage(ds.name, 1, size);
+      },
       firstPageNumber: 1,
-      lastPageNumber: 1,
-      reset: () => {},
+      lastPageNumber: Math.max(1, Math.ceil(totalResultCount / dsState.pageSize)),
+      reset: () => {
+        getState().addLogEntry({ category: 'data', method: 'paging.reset', args: { dataSet: ds.name } });
+        getState().setDatasetPage(ds.name, 1, dsState.pageSize);
+      },
     },
-    sorting: [],
-    filtering: { getFilter: () => null, setFilter: () => {} },
+    sorting: liveSorting,
+    filtering: {
+      getFilter: () => liveFilter,
+      setFilter: (f: any) => {
+        liveFilter = f;
+        getState().setDatasetFiltering(ds.name, f);
+      },
+    },
     linking: {
       getLinkedEntities: () => {
         // Build linked entity list from all entity types in the data store.
@@ -218,7 +282,7 @@ function buildDataSet(
     },
     records,
     sortedRecordIds: sortedIds,
-    columns: Object.keys(sortedIds.length > 0 ? getEntityData(ds.name)[0] ?? {} : {}).map(name => ({
+    columns: Object.keys(sortedIds.length > 0 ? getEntityData(resolvedEntity)[0] ?? {} : {}).map(name => ({
       name,
       displayName: name,
       dataType: 'string',
@@ -230,6 +294,8 @@ function buildDataSet(
       disableSorting: false,
     })),
     refresh: () => {
+      // Capture any control-side mutations to sorting back into store, then trigger updateView.
+      getState().setDatasetSorting(ds.name, liveSorting.map(s => ({ name: s.name, sortDirection: s.sortDirection })));
       getState().addLogEntry({ category: 'data', method: 'dataset.refresh', args: { dataSet: ds.name } });
       for (const cb of refreshCallbacks) cb();
     },
@@ -238,16 +304,40 @@ function buildDataSet(
     },
     getTitle: () => ds.displayNameKey,
     getViewId: () => '',
-    getTargetEntityType: () => ds.name,
+    getTargetEntityType: () => resolvedEntity,
     addOnDatasetItemOpened: () => {},
     removeOnDatasetItemOpened: () => {},
     addColumn: () => {},
-    delete: () => Promise.resolve(),
-    newRecord: () => Promise.resolve(),
-    save: () => Promise.resolve(),
-    getSelectedRecordIds: () => [],
-    setSelectedRecordIds: () => {},
-    clearSelectedRecordIds: () => {},
+    delete: () => {
+      const ids = getState().datasetState[ds.name]?.selectedIds ?? [];
+      getState().addLogEntry({ category: 'data', method: 'dataset.delete', args: { dataSet: ds.name, ids } });
+      let removed = 0;
+      for (const id of ids) {
+        if (deleteEntityRecord(resolvedEntity, id)) removed++;
+      }
+      if (removed > 0) {
+        getState().setDatasetSelectedIds(ds.name, []);
+        getState().bumpDataVersion();
+      }
+      return Promise.resolve(ids);
+    },
+    newRecord: () => {
+      const created = addEntityRecord(resolvedEntity, {});
+      getState().addLogEntry({ category: 'data', method: 'dataset.newRecord', args: { dataSet: ds.name, record: created } });
+      getState().bumpDataVersion();
+      return Promise.resolve(created);
+    },
+    save: () => {
+      getState().addLogEntry({ category: 'data', method: 'dataset.save', args: { dataSet: ds.name } });
+      return Promise.resolve();
+    },
+    getSelectedRecordIds: () => getState().datasetState[ds.name]?.selectedIds ?? [],
+    setSelectedRecordIds: (ids: string[]) => {
+      getState().setDatasetSelectedIds(ds.name, ids);
+    },
+    clearSelectedRecordIds: () => {
+      getState().setDatasetSelectedIds(ds.name, []);
+    },
   };
 }
 
@@ -318,6 +408,39 @@ function buildParameters(
   return params;
 }
 
+export interface CreateContextHooks {
+  /** Called when the control invokes context.factory.requestRender(). */
+  requestRender?: () => void;
+}
+
+/**
+ * Build a Proxy for context.events so any manifest-declared event the control
+ * invokes (e.g. context.events.OnSelected(payload)) is logged to the harness
+ * console with its arguments. Returns a real function for any accessed key.
+ */
+function createEventsProxy(getState: () => HarnessStore): Record<string, (...args: any[]) => void> {
+  const handlers: Record<string, (...args: any[]) => void> = {};
+  return new Proxy(handlers, {
+    get(target, prop: string | symbol) {
+      if (typeof prop !== 'string') return (target as any)[prop];
+      if (!target[prop]) {
+        target[prop] = (...args: any[]) => {
+          getState().addLogEntry({
+            category: 'events',
+            method: prop,
+            args: args.length === 1 ? args[0] : args,
+          });
+        };
+      }
+      return target[prop];
+    },
+    has() {
+      // Make `'OnSelected' in context.events` always return true so feature-detection works.
+      return true;
+    },
+  });
+}
+
 /**
  * Create a full ComponentFramework.Context object.
  */
@@ -325,6 +448,7 @@ export function createContext(
   manifest: ManifestConfig,
   getState: () => HarnessStore,
   getEntityData: (entityType: string) => Record<string, any>[],
+  hooks: CreateContextHooks = {},
 ) {
   const state = getState();
 
@@ -334,34 +458,54 @@ export function createContext(
     device: createDeviceShim(getState),
     factory: {
       getPopupService: () => ({
-        createPopup: () => {},
-        deletePopup: () => {},
-        openPopup: () => {},
-        closePopup: () => {},
-        updatePopup: () => {},
-        setPopupsId: () => {},
-        getPopupsId: () => '',
+        createPopup: (popup: any) => {
+          getState().addLogEntry({ category: 'factory', method: 'popup.create', args: { name: popup?.name } });
+          if (popup?.name) createPopupEntry(popup);
+        },
+        deletePopup: (name: string) => {
+          getState().addLogEntry({ category: 'factory', method: 'popup.delete', args: { name } });
+          deletePopupEntry(name);
+        },
+        openPopup: (name: string) => {
+          getState().addLogEntry({ category: 'factory', method: 'popup.open', args: { name } });
+          openPopupEntry(name);
+        },
+        closePopup: (name: string) => {
+          getState().addLogEntry({ category: 'factory', method: 'popup.close', args: { name } });
+          closePopupEntry(name);
+        },
+        updatePopup: (popup: any) => {
+          getState().addLogEntry({ category: 'factory', method: 'popup.update', args: { name: popup?.name } });
+          if (popup?.name) updatePopupEntry(popup);
+        },
+        setPopupsId: (id: string) => {
+          getState().addLogEntry({ category: 'factory', method: 'popup.setPopupsId', args: { id } });
+          setPopupsIdValue(id);
+        },
+        getPopupsId: () => getPopupsIdValue(),
       }),
       requestRender: () => {
         getState().addLogEntry({ category: 'factory', method: 'requestRender' });
+        hooks.requestRender?.();
       },
     },
     formatting: createFormattingShim(),
     mode: createModeShim(getState),
     navigation: createNavigationShim(getState),
     resources: createResourcesShim(),
-    userSettings: createUserSettingsShim(),
+    userSettings: createUserSettingsShim(getState),
     utils: createUtilsShim(getState),
     webAPI: createWebApiShim(getState, getEntityData),
     updatedProperties: ['all'],
-    events: {},
+    events: createEventsProxy(getState),
     fluentDesignLanguage: createFluentDesignShim(getState),
-    copilot: {},
+    copilot: createCopilotShim(getState),
 
     // Non-standard context extensions used by some controls (e.g. InspectionControl)
     page: {
       get entityId() { return getState().pageEntityId; },
       get entityTypeName() { return getState().pageEntityTypeName; },
+      get entityRecordName() { return getState().pageEntityRecordName; },
       appId: '',
       isPageReadOnly: false,
     },

@@ -5,7 +5,7 @@ import {
 import {
   PlugConnected24Regular, Phone24Regular, TopSpeed24Regular,
   Settings24Regular, WeatherMoon24Regular, WeatherSunny24Regular,
-  Database24Regular, Beaker24Regular, Play24Regular,
+  Database24Regular, Beaker24Regular, Play24Regular, Person24Regular,
 } from '@fluentui/react-icons';
 import { useHarnessStore, DEVICE_PRESETS } from '../store/harness-store';
 import { ControlViewport } from './panels/ControlViewport';
@@ -17,6 +17,7 @@ import { PerformancePanel } from './panels/PerformancePanel';
 import { DataPanel } from './panels/DataPanel';
 import { ScenariosPanel } from './panels/ScenariosPanel';
 import { LifecyclePanel } from './panels/LifecyclePanel';
+import { UserSettingsPanel } from './panels/UserSettingsPanel';
 import type { ManifestConfig } from '../types/manifest';
 
 const useStyles = makeStyles({
@@ -105,7 +106,7 @@ interface Props {
   controlDir: string;
 }
 
-type SidePanelTab = 'properties' | 'data' | 'scenarios' | 'network' | 'device' | 'lifecycle' | 'performance';
+type SidePanelTab = 'properties' | 'data' | 'scenarios' | 'network' | 'device' | 'user' | 'lifecycle' | 'performance';
 
 export function HarnessShell({ manifest, bundlePath, cssFiles, controlDir }: Props) {
   const styles = useStyles();
@@ -215,6 +216,7 @@ export function HarnessShell({ manifest, bundlePath, cssFiles, controlDir }: Pro
               <Tab value="scenarios" icon={<Beaker24Regular />} title="Test Scenarios" />
               <Tab value="network" icon={<PlugConnected24Regular />} title="Network Conditioning" />
               <Tab value="device" icon={<Phone24Regular />} title="Device Emulation" />
+              <Tab value="user" icon={<Person24Regular />} title="User Settings" />
               <Tab value="lifecycle" icon={<Play24Regular />} title="Lifecycle Monitor" />
               <Tab value="performance" icon={<TopSpeed24Regular />} title="Performance" />
             </TabList>
@@ -225,6 +227,7 @@ export function HarnessShell({ manifest, bundlePath, cssFiles, controlDir }: Pro
             <div style={{ display: activeTab === 'scenarios' ? 'contents' : 'none' }}><ScenariosPanel controlId={`${manifest.namespace}.${manifest.constructor}`} onScenarioLoaded={() => setActiveTab('properties')} /></div>
             {activeTab === 'network' && <NetworkPanel />}
             {activeTab === 'device' && <DevicePanel />}
+            {activeTab === 'user' && <UserSettingsPanel />}
             {activeTab === 'lifecycle' && <LifecyclePanel />}
             {activeTab === 'performance' && <PerformancePanel />}
           </div>

@@ -544,8 +544,10 @@ export function PropertyEditor({ manifest }: Props) {
   const styles = useStyles();
   const pageEntityId = useHarnessStore(s => s.pageEntityId);
   const pageEntityTypeName = useHarnessStore(s => s.pageEntityTypeName);
+  const pageEntityRecordName = useHarnessStore(s => s.pageEntityRecordName);
   const setPageEntityId = useHarnessStore(s => s.setPageEntityId);
   const setPageEntityTypeName = useHarnessStore(s => s.setPageEntityTypeName);
+  const setPageEntityRecordName = useHarnessStore(s => s.setPageEntityRecordName);
 
   // Get available entity types from data.json
   const entityTypes = useMemo(() => getEntityStoreKeys(), []);
@@ -599,6 +601,18 @@ export function PropertyEditor({ manifest }: Props) {
           placeholder="Record GUID"
           value={pageEntityId}
           onChange={(_, d) => setPageEntityId(d.value)}
+        />
+      </div>
+      <div className={styles.field}>
+        <div className={styles.label}>
+          Entity Record Name
+          <span className={styles.typeHint}>context.mode.contextInfo.entityRecordName</span>
+        </div>
+        <Input
+          size="small"
+          placeholder="Record name"
+          value={pageEntityRecordName}
+          onChange={(_, d) => setPageEntityRecordName(d.value)}
         />
       </div>
       <Divider style={{ margin: '8px 0' }} />

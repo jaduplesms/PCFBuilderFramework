@@ -17,7 +17,12 @@ function delay(ms: number): Promise<void> {
  * Parse a single OData condition into a predicate function.
  */
 function parseSingleCondition(expr: string): ((e: Record<string, any>) => boolean) | null {
-  const trimmed = expr.trim();
+  // Strip balanced outer parens (e.g. when this condition came from splitting
+  // a parenthesized OR group like `(field eq A or field eq B)` — each side
+  // arrives with a leftover `(` or `)` attached).
+  let trimmed = expr.trim();
+  while (trimmed.startsWith('(')) trimmed = trimmed.slice(1).trimStart();
+  while (trimmed.endsWith(')')) trimmed = trimmed.slice(0, -1).trimEnd();
 
   // contains(field,'value')
   const containsMatch = trimmed.match(/^contains\((\w+),\s*'([^']*)'\)$/i);

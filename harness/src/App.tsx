@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react';
 import { FluentProvider, webLightTheme, webDarkTheme, Spinner, MessageBar, MessageBarBody } from '@fluentui/react-components';
 import { HarnessShell } from './ui/HarnessShell';
 import { Gallery } from './ui/gallery/Gallery';
+import { DialogHost } from './ui/DialogHost';
+import { PopupHost } from './ui/PopupHost';
 import { useHarnessStore } from './store/harness-store';
-import { loadEntityData } from './store/data-store';
+import { loadEntityData, subscribeData } from './store/data-store';
 import { loadMetadata } from './store/metadata-store';
 import { setResxStrings } from './shim/resources';
 import type { ManifestConfig } from './types/manifest';
@@ -28,6 +30,11 @@ export function App() {
 
   useEffect(() => {
     setManifest(manifestData);
+
+    // Bridge data-store mutations into the harness store so ControlViewport rebuilds.
+    const unsubscribe = subscribeData(() => {
+      useHarnessStore.getState().bumpDataVersion();
+    });
 
     // Load RESX localized strings
     if (resxStrings && Object.keys(resxStrings).length > 0) {
@@ -59,6 +66,7 @@ export function App() {
       }
       setReady(true);
     });
+    return unsubscribe;
   }, []);
 
   if (!ready) {
@@ -74,6 +82,8 @@ export function App() {
   return (
     <FluentProvider theme={isDarkMode ? webDarkTheme : webLightTheme}>
       <HarnessShell manifest={manifestData} bundlePath={bundlePath} cssFiles={cssFiles} controlDir={controlDir} />
+      <DialogHost />
+      <PopupHost />
     </FluentProvider>
   );
 }

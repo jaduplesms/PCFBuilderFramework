@@ -45,6 +45,23 @@ export interface ResourceLeak {
 
 export type NetworkMode = 'online' | 'offline' | 'slow3g' | 'fast3g' | 'custom';
 
+export interface DatasetSortStatus {
+  name: string;
+  sortDirection: 0 | 1; // 0 = ascending, 1 = descending
+}
+
+export interface DatasetState {
+  pageNumber: number;
+  pageSize: number;
+  sorting: DatasetSortStatus[];
+  filtering: any;
+  selectedIds: string[];
+}
+
+export function defaultDatasetState(): DatasetState {
+  return { pageNumber: 1, pageSize: 250, sorting: [], filtering: null, selectedIds: [] };
+}
+
 export interface DevicePreset {
   name: string;
   width: number;
@@ -86,6 +103,12 @@ export interface HarnessStore {
   formFactor: number;
   setDevicePreset: (preset: string) => void;
 
+  // Component container size (null = fill viewport)
+  containerWidth: number | null;
+  containerHeight: number | null;
+  setContainerWidth: (width: number | null) => void;
+  setContainerHeight: (height: number | null) => void;
+
   // Control mode
   isControlDisabled: boolean;
   setControlDisabled: (disabled: boolean) => void;
@@ -93,12 +116,46 @@ export interface HarnessStore {
   // Page context (for controls that read context.page.entityId / entityTypeName)
   pageEntityId: string;
   pageEntityTypeName: string;
+  pageEntityRecordName: string;
   setPageEntityId: (id: string) => void;
   setPageEntityTypeName: (name: string) => void;
+  setPageEntityRecordName: (name: string) => void;
 
   // Theme
   isDarkMode: boolean;
   toggleDarkMode: () => void;
+
+  // Fullscreen state (toggled via context.mode.setFullScreen)
+  isFullscreen: boolean;
+  setFullscreen: (value: boolean) => void;
+
+  // Host (drives context.client.getClient())
+  host: 'Web' | 'Mobile' | 'Outlook' | 'Teams';
+  setHost: (host: 'Web' | 'Mobile' | 'Outlook' | 'Teams') => void;
+
+  // Dataset state (per dataset name) and a monotonically increasing data version
+  // that ControlViewport observes to trigger updateView when data mutates.
+  datasetState: Record<string, DatasetState>;
+  dataVersion: number;
+  setDatasetPage: (name: string, pageNumber: number, pageSize: number) => void;
+  setDatasetSorting: (name: string, sorting: DatasetSortStatus[]) => void;
+  setDatasetFiltering: (name: string, filtering: any) => void;
+  setDatasetSelectedIds: (name: string, ids: string[]) => void;
+  bumpDataVersion: () => void;
+
+  // User settings (drives context.userSettings)
+  userLanguageId: number;
+  userIsRTL: boolean;
+  userTimeZoneOffsetMinutes: number;
+  userId: string;
+  userName: string;
+  userSecurityRoles: string[];
+  setUserLanguageId: (lcid: number) => void;
+  setUserIsRTL: (rtl: boolean) => void;
+  setUserTimeZoneOffsetMinutes: (offset: number) => void;
+  setUserId: (id: string) => void;
+  setUserName: (name: string) => void;
+  setUserSecurityRoles: (roles: string[]) => void;
 
   // Performance metrics
   renderCount: number;
@@ -200,6 +257,12 @@ export const useHarnessStore = create<HarnessStore>((set, get) => ({
     }
   },
 
+  // Component container size (null = fill viewport)
+  containerWidth: null,
+  containerHeight: null,
+  setContainerWidth: (width) => set({ containerWidth: width }),
+  setContainerHeight: (height) => set({ containerHeight: height }),
+
   // Mode
   isControlDisabled: false,
   setControlDisabled: (disabled) => set({ isControlDisabled: disabled }),
@@ -207,12 +270,65 @@ export const useHarnessStore = create<HarnessStore>((set, get) => ({
   // Page context
   pageEntityId: '',
   pageEntityTypeName: '',
+  pageEntityRecordName: '',
   setPageEntityId: (id) => set({ pageEntityId: id }),
   setPageEntityTypeName: (name) => set({ pageEntityTypeName: name }),
+  setPageEntityRecordName: (name) => set({ pageEntityRecordName: name }),
 
   // Theme
   isDarkMode: false,
   toggleDarkMode: () => set(s => ({ isDarkMode: !s.isDarkMode })),
+
+  // Fullscreen
+  isFullscreen: false,
+  setFullscreen: (value) => set({ isFullscreen: value }),
+
+  // Host
+  host: 'Web',
+  setHost: (host) => set({ host }),
+
+  // Dataset state (per dataset name)
+  datasetState: {},
+  dataVersion: 0,
+  setDatasetPage: (name, pageNumber, pageSize) => set(s => ({
+    datasetState: {
+      ...s.datasetState,
+      [name]: { ...defaultDatasetState(), ...s.datasetState[name], pageNumber, pageSize },
+    },
+  })),
+  setDatasetSorting: (name, sorting) => set(s => ({
+    datasetState: {
+      ...s.datasetState,
+      [name]: { ...defaultDatasetState(), ...s.datasetState[name], sorting },
+    },
+  })),
+  setDatasetFiltering: (name, filtering) => set(s => ({
+    datasetState: {
+      ...s.datasetState,
+      [name]: { ...defaultDatasetState(), ...s.datasetState[name], filtering },
+    },
+  })),
+  setDatasetSelectedIds: (name, ids) => set(s => ({
+    datasetState: {
+      ...s.datasetState,
+      [name]: { ...defaultDatasetState(), ...s.datasetState[name], selectedIds: ids },
+    },
+  })),
+  bumpDataVersion: () => set(s => ({ dataVersion: s.dataVersion + 1 })),
+
+  // User settings (driven by Intl APIs at runtime via the userSettings shim)
+  userLanguageId: 1033,
+  userIsRTL: false,
+  userTimeZoneOffsetMinutes: -new Date().getTimezoneOffset(),
+  userId: '{00000000-0000-0000-0000-000000000001}',
+  userName: 'Harness User',
+  userSecurityRoles: ['system-administrator'],
+  setUserLanguageId: (lcid) => set({ userLanguageId: lcid }),
+  setUserIsRTL: (rtl) => set({ userIsRTL: rtl }),
+  setUserTimeZoneOffsetMinutes: (offset) => set({ userTimeZoneOffsetMinutes: offset }),
+  setUserId: (id) => set({ userId: id }),
+  setUserName: (name) => set({ userName: name }),
+  setUserSecurityRoles: (roles) => set({ userSecurityRoles: roles }),
 
   // Performance
   renderCount: 0,

@@ -28,6 +28,20 @@ export class ControlHost {
   private resourceTracker = new ResourceTracker();
   // For virtual controls: a stable forceUpdate function to re-render without remounting
   private virtualForceUpdate: (() => void) | null = null;
+  // For virtual controls: ref to the current element so the wrapper can re-render with updated content
+  private _virtualElementRef: { current: any } | null = null;
+  // Snapshot of state at the previous updateView, used to compute updatedProperties
+  private prevSnapshot: {
+    propertyValues: Record<string, any>;
+    viewportWidth: number;
+    viewportHeight: number;
+    containerWidth: number | null;
+    containerHeight: number | null;
+    pageEntityId: string;
+    pageEntityTypeName: string;
+    pageEntityRecordName: string;
+    isFullscreen: boolean;
+  } | null = null;
 
   constructor(
     manifest: ManifestConfig,
@@ -58,7 +72,9 @@ export class ControlHost {
       await preloadBundleResources();
 
       // Build context
-      this.context = createContext(this.manifest, this.getState, getEntityData);
+      this.context = createContext(this.manifest, this.getState, getEntityData, {
+        requestRender: () => this.callUpdateView(),
+      });
 
       // notifyOutputChanged callback — defer logging to avoid triggering
       // React re-renders during the control's synchronous render cycle.
@@ -109,14 +125,76 @@ export class ControlHost {
     }
   }
 
+  /**
+   * Compute the list of property names / reserved tokens that have changed
+   * since the previous updateView. Returns ['all'] for the first call.
+   * Reserved tokens emitted: 'layoutChanged' (viewport or container size),
+   * 'parentRecord' (page context), 'fullscreen_open' / 'fullscreen_close'.
+   */
+  private computeUpdatedProperties(): string[] {
+    const s = this.getState();
+    if (!this.prevSnapshot) return ['all'];
+    const result: string[] = [];
+
+    const prev = this.prevSnapshot;
+    const allKeys = new Set([...Object.keys(s.propertyValues), ...Object.keys(prev.propertyValues)]);
+    for (const name of allKeys) {
+      if (!Object.is(s.propertyValues[name], prev.propertyValues[name])) {
+        result.push(name);
+      }
+    }
+
+    if (
+      s.viewportWidth !== prev.viewportWidth ||
+      s.viewportHeight !== prev.viewportHeight ||
+      s.containerWidth !== prev.containerWidth ||
+      s.containerHeight !== prev.containerHeight
+    ) {
+      result.push('layoutChanged');
+    }
+
+    if (
+      s.pageEntityId !== prev.pageEntityId ||
+      s.pageEntityTypeName !== prev.pageEntityTypeName ||
+      s.pageEntityRecordName !== prev.pageEntityRecordName
+    ) {
+      result.push('parentRecord');
+    }
+
+    if (s.isFullscreen !== prev.isFullscreen) {
+      result.push(s.isFullscreen ? 'fullscreen_open' : 'fullscreen_close');
+    }
+
+    return result;
+  }
+
+  private snapshotState(): void {
+    const s = this.getState();
+    this.prevSnapshot = {
+      propertyValues: { ...s.propertyValues },
+      viewportWidth: s.viewportWidth,
+      viewportHeight: s.viewportHeight,
+      containerWidth: s.containerWidth,
+      containerHeight: s.containerHeight,
+      pageEntityId: s.pageEntityId,
+      pageEntityTypeName: s.pageEntityTypeName,
+      pageEntityRecordName: s.pageEntityRecordName,
+      isFullscreen: s.isFullscreen,
+    };
+  }
+
   callUpdateView(): void {
     if (!this.control || !this.context) return;
     // Prevent re-entrant calls (e.g. notifyOutputChanged → store update → useEffect → updateView)
     if (this.isUpdating) return;
     this.isUpdating = true;
 
+    // Diff state to produce a precise updatedProperties list
+    const updated = this.computeUpdatedProperties();
+
     // Rebuild parameters with current store values
-    rebuildParameters(this.context, this.manifest, this.getState().propertyValues, undefined, getEntityData, this.getState);
+    rebuildParameters(this.context, this.manifest, this.getState().propertyValues, updated, getEntityData, this.getState);
+    this.snapshotState();
 
     const start = performance.now();
 
@@ -142,7 +220,7 @@ export class ControlHost {
               host.virtualForceUpdate = () => this.forceUpdate();
             }
             render() {
-              return host._virtualElementRef.current;
+              return host._virtualElementRef?.current ?? null;
             }
           }
 
@@ -230,6 +308,7 @@ export class ControlHost {
     }
     this.virtualForceUpdate = null;
     (this as any)._virtualElementRef = null;
+    this.prevSnapshot = null;
     if (this.container) {
       this.container.innerHTML = '';
     }

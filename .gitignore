@@ -36,10 +36,11 @@ generate_*.py
 # Claude Code settings
 .claude/
 
-# Generated docs (not source)
+# Design & docs (not part of harness source)
+design/
 *.docx
 *.pptx
 screenshots/
 *.customization
 DEPLOYMENT_ROADMAP.md
-tools/update_booking_form.py
+program-dashboard.html

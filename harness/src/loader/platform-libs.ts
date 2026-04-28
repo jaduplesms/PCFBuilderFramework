@@ -11,6 +11,20 @@
  */
 
 import type { ManifestResources } from '../types/manifest';
+import {
+  tokens as v9Tokens,
+  webLightTheme as v9WebLightTheme,
+  webDarkTheme as v9WebDarkTheme,
+  teamsLightTheme as v9TeamsLightTheme,
+  teamsDarkTheme as v9TeamsDarkTheme,
+  teamsHighContrastTheme as v9TeamsHighContrastTheme,
+  shorthands as v9Shorthands,
+  makeStyles as v9MakeStyles,
+  mergeClasses as v9MergeClasses,
+  makeFluentProvider as v9MakeFluentProvider,
+  useFluent as v9UseFluent,
+  useThemeClassName as v9UseThemeClassName,
+} from './fluent-v9-shim';
 
 /**
  * Set up versioned global aliases and Fluent UI stubs.
@@ -381,6 +395,139 @@ function createFluentStub(w: any) {
 
   // Build the combined lookup
   const allExports: Record<string, any> = { ...enums, ...components, ...utilities };
+
+  // Fluent v9 named exports — only inject when the Fluent UI version is v9+.
+  // For v8 these names don't exist on the real package; leaving them out
+  // matches reality and avoids surprises when authors target v8.
+  // (Detection happens in the caller; this stub is only mounted under the
+  // FluentUIReactv940 global, so we always add v9 exports here.)
+  const fluentProviderStub = v9MakeFluentProvider(getReact);
+  Object.assign(allExports, {
+    tokens: v9Tokens,
+    webLightTheme: v9WebLightTheme,
+    webDarkTheme: v9WebDarkTheme,
+    teamsLightTheme: v9TeamsLightTheme,
+    teamsDarkTheme: v9TeamsDarkTheme,
+    teamsHighContrastTheme: v9TeamsHighContrastTheme,
+    shorthands: v9Shorthands,
+    makeStyles: v9MakeStyles,
+    mergeClasses: v9MergeClasses,
+    FluentProvider: fluentProviderStub,
+    useFluent: v9UseFluent,
+    useThemeClassName: v9UseThemeClassName,
+    // Common dialog sub-components used in v9 — pass-through wrappers
+    Dialog: (props: any) => {
+      const R = getReact();
+      if (!R || props.open === false) return null;
+      return R.createElement('div', {
+        'data-fluent': 'Dialog',
+        style: {
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 10000,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          backgroundColor: 'rgba(0,0,0,0.4)',
+        },
+        onClick: (e: any) => {
+          if (e.target === e.currentTarget && props.onOpenChange) {
+            props.onOpenChange(e, { open: false, type: 'backdropClick' });
+          }
+        },
+      }, props.children);
+    },
+    DialogSurface: (props: any) => {
+      const R = getReact();
+      if (!R) return null;
+      return R.createElement('div', {
+        'data-fluent': 'DialogSurface',
+        style: {
+          backgroundColor: '#FFFFFF', borderRadius: 8, minWidth: 340, maxWidth: 480,
+          width: '100%', maxHeight: '80vh', boxShadow: v9Tokens.shadow16, overflow: 'hidden',
+          display: 'flex', flexDirection: 'column',
+        },
+      }, props.children);
+    },
+    DialogBody: (props: any) => {
+      const R = getReact();
+      if (!R) return null;
+      return R.createElement('div', {
+        'data-fluent': 'DialogBody', style: { display: 'flex', flexDirection: 'column' },
+      }, props.children);
+    },
+    DialogTitle: (props: any) => {
+      const R = getReact();
+      if (!R) return null;
+      return R.createElement('div', {
+        'data-fluent': 'DialogTitle',
+        style: { padding: '24px 24px 8px 24px', fontSize: 20, fontWeight: 600, color: v9Tokens.colorNeutralForeground1 },
+      }, props.children);
+    },
+    DialogContent: (props: any) => {
+      const R = getReact();
+      if (!R) return null;
+      return R.createElement('div', {
+        'data-fluent': 'DialogContent',
+        style: { padding: '0 24px 16px 24px', color: v9Tokens.colorNeutralForeground2, overflow: 'auto' },
+      }, props.children);
+    },
+    DialogActions: (props: any) => {
+      const R = getReact();
+      if (!R) return null;
+      return R.createElement('div', {
+        'data-fluent': 'DialogActions',
+        style: { padding: '8px 24px 24px 24px', display: 'flex', gap: 8, justifyContent: 'flex-end' },
+      }, props.children);
+    },
+    DialogTrigger: (props: any) => {
+      const R = getReact();
+      if (!R) return null;
+      return typeof props.children === 'function' ? props.children({}) : props.children;
+    },
+    // v9 Button — render proper HTML button respecting appearance prop
+    Button: (props: any) => {
+      const R = getReact();
+      if (!R) return null;
+      const { appearance = 'secondary', icon, children, disabled, onClick, className, style: extraStyle } = props;
+      const palette: Record<string, any> = {
+        primary: {
+          background: v9Tokens.colorBrandBackground, color: v9Tokens.colorNeutralForegroundOnBrand,
+          border: `1px solid ${v9Tokens.colorBrandBackground}`,
+        },
+        secondary: {
+          background: v9Tokens.colorNeutralBackground1, color: v9Tokens.colorNeutralForeground1,
+          border: `1px solid ${v9Tokens.colorNeutralStroke1}`,
+        },
+        subtle: {
+          background: 'transparent', color: v9Tokens.colorNeutralForeground2,
+          border: '1px solid transparent',
+        },
+        outline: {
+          background: 'transparent', color: v9Tokens.colorNeutralForeground1,
+          border: `1px solid ${v9Tokens.colorNeutralStroke1}`,
+        },
+        transparent: {
+          background: 'transparent', color: v9Tokens.colorNeutralForeground2,
+          border: '1px solid transparent',
+        },
+      };
+      const p = palette[appearance] ?? palette.secondary;
+      return R.createElement('button', {
+        type: 'button', 'data-fluent': 'Button', 'data-appearance': appearance,
+        onClick, disabled, className,
+        style: {
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+          padding: '5px 12px', minHeight: 32,
+          borderRadius: 4, fontFamily: v9Tokens.fontFamilyBase, fontSize: 14, fontWeight: 600,
+          cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1,
+          ...p,
+          ...extraStyle,
+        },
+      }, icon, children);
+    },
+    MessageBarBody: (props: any) => {
+      const R = getReact();
+      if (!R) return null;
+      return R.createElement('div', { 'data-fluent': 'MessageBarBody', style: { padding: '4px 0' } }, props.children);
+    },
+  });
 
   return new Proxy(allExports, {
     get(target, prop) {
