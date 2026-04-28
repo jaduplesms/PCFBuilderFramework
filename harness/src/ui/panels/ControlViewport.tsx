@@ -36,14 +36,24 @@ const useStyles = makeStyles({
     overflow: 'auto',
     padding: '16px',
   },
+  viewportFrame: {
+    position: 'relative' as const,
+    border: '2px solid #1a1a1a',
+    borderRadius: tokens.borderRadiusMedium,
+    backgroundColor: '#fafafa',
+    boxShadow: tokens.shadow8,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
   viewport: {
     backgroundColor: '#ffffff',
-    boxShadow: tokens.shadow4,
-    borderRadius: tokens.borderRadiusMedium,
     overflow: 'hidden',
     position: 'relative' as const,
     containerType: 'inline-size',
     containerName: 'pcf-viewport',
+    boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.08)',
   } as any,
   controlContainer: {
     width: '100%',
@@ -61,35 +71,30 @@ const useStyles = makeStyles({
   error: {
     margin: '16px',
   },
-  sizeBadge: {
-    position: 'absolute' as const,
-    bottom: '8px',
-    right: '8px',
-    display: 'flex',
-    flexDirection: 'column' as const,
-    alignItems: 'flex-end',
-    gap: '2px',
-    padding: '6px 10px',
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    color: '#FFFFFF',
-    borderRadius: tokens.borderRadiusMedium,
-    fontFamily: tokens.fontFamilyMonospace,
-    fontSize: tokens.fontSizeBase200,
-    pointerEvents: 'none' as const,
-    userSelect: 'none' as const,
-    zIndex: 5,
-  },
-  sizeBadgeLabel: {
-    fontSize: '10px',
-    opacity: 0.7,
-    textTransform: 'uppercase' as const,
-    letterSpacing: '0.5px',
-    marginRight: '4px',
-  },
-  sizeBadgeRow: {
+  statusBar: {
     display: 'flex',
     alignItems: 'center',
-    gap: '4px',
+    gap: '16px',
+    padding: '4px 12px',
+    borderTop: `1px solid ${tokens.colorNeutralStroke2}`,
+    backgroundColor: tokens.colorNeutralBackground2,
+    flexShrink: 0,
+    fontFamily: tokens.fontFamilyMonospace,
+    fontSize: tokens.fontSizeBase200,
+    color: tokens.colorNeutralForeground2,
+  },
+  statusItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+  },
+  statusLabel: {
+    fontSize: '10px',
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.5px',
+    opacity: 0.7,
+    fontFamily: tokens.fontFamilyBase,
+    fontWeight: tokens.fontWeightSemibold,
   },
 });
 
@@ -382,38 +387,48 @@ export function ControlViewport({ manifest, bundlePath, cssFiles, controlDir }: 
 
       <div className={styles.viewportWrapper}>
         <div
-          className={styles.viewport}
+          className={styles.viewportFrame}
           style={{
-            width: containerWidth ?? viewportWidth,
-            height: containerHeight ?? viewportHeight,
+            width: viewportWidth,
+            height: viewportHeight,
           }}
         >
-          {hostState.error && (
-            <MessageBar intent="error" className={styles.error}>
-              <MessageBarBody>{hostState.error}</MessageBarBody>
-            </MessageBar>
-          )}
-          {!hostState.isLoaded && !hostState.error && (
-            <div className={styles.center}>
-              <Spinner label="Loading control..." />
-            </div>
-          )}
-          <div ref={containerRef} className={styles.controlContainer} style={{
-            width: containerWidth != null ? `${containerWidth}px` : '100%',
-            height: containerHeight != null ? `${containerHeight}px` : '100%',
-          }} />
-          <div className={styles.sizeBadge} aria-label="Viewport size">
-            <div className={styles.sizeBadgeRow}>
-              <span className={styles.sizeBadgeLabel}>Viewport</span>
-              <span>{viewportWidth} × {viewportHeight}</span>
-            </div>
-            {(containerWidth != null || containerHeight != null) && (
-              <div className={styles.sizeBadgeRow}>
-                <span className={styles.sizeBadgeLabel}>Container</span>
-                <span>{containerWidth ?? viewportWidth} × {containerHeight ?? viewportHeight}</span>
+          <div
+            className={styles.viewport}
+            style={{
+              width: containerWidth ?? viewportWidth,
+              height: containerHeight ?? viewportHeight,
+            }}
+          >
+            {hostState.error && (
+              <MessageBar intent="error" className={styles.error}>
+                <MessageBarBody>{hostState.error}</MessageBarBody>
+              </MessageBar>
+            )}
+            {!hostState.isLoaded && !hostState.error && (
+              <div className={styles.center}>
+                <Spinner label="Loading control..." />
               </div>
             )}
+            <div ref={containerRef} className={styles.controlContainer} style={{
+              width: containerWidth != null ? `${containerWidth}px` : '100%',
+              height: containerHeight != null ? `${containerHeight}px` : '100%',
+            }} />
           </div>
+        </div>
+      </div>
+
+      <div className={styles.statusBar} aria-label="Viewport size">
+        <div className={styles.statusItem}>
+          <span className={styles.statusLabel}>Viewport</span>
+          <span>{viewportWidth} × {viewportHeight}</span>
+        </div>
+        <div className={styles.statusItem}>
+          <span className={styles.statusLabel}>Container</span>
+          <span>{containerWidth ?? viewportWidth} × {containerHeight ?? viewportHeight}</span>
+          {(containerWidth == null && containerHeight == null) && (
+            <span style={{ opacity: 0.5, fontFamily: tokens.fontFamilyBase, fontSize: '10px' }}>(full)</span>
+          )}
         </div>
       </div>
     </div>
